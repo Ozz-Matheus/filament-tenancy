@@ -4,9 +4,9 @@ namespace TomatoPHP\FilamentTenancy\Filament\Pages;
 
 use DanHarrin\LivewireRateLimiting\Exceptions\TooManyRequestsException;
 use Filament\Facades\Filament;
-use Filament\Http\Responses\Auth\Contracts\LoginResponse;
+use Filament\Auth\Http\Responses\Contracts\LoginResponse;
 use Filament\Models\Contracts\FilamentUser;
-use Filament\Pages\Auth\Login;
+use Filament\Auth\Pages\Login;
 use Spatie\Permission\Models\Permission;
 use Spatie\Permission\Models\Role;
 
