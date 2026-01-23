@@ -44,7 +44,7 @@ class AuthController extends Controller
                 $id = str($socialUser->attributes['nickname'])->slug('_');
             }
             else {
-                $id = \Str::of($socialUser->name)->slug('_')->toString();
+                $id = Str::of($socialUser->name)->slug('_')->toString();
             }
 
             $record = Tenant::query()->whereHas('social', function ($query) use ($socialUser, $provider) {
@@ -71,7 +71,7 @@ class AuthController extends Controller
                     'provider_id' => $socialUser->id
                 ]);
 
-                $record->domains()->create(['domain' => \Str::of($socialUser->name)->slug()->toString()]);
+                $record->domains()->create(['domain' => Str::of($socialUser->name)->slug()->toString()]);
             }
             else {
                 if($sessionData){

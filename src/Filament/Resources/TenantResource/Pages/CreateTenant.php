@@ -7,6 +7,7 @@ use Filament\Resources\Pages\CreateRecord;
 use Filament\Support\Facades\FilamentView;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
 use TomatoPHP\FilamentTenancy\Models\Tenant;
 use Throwable;
 use function Filament\Support\is_app_url;
@@ -63,6 +64,9 @@ class CreateTenant extends CreateRecord
 
         $record = $this->record;
 
+        // Waiting for the tenant creation process to complete
+        sleep(2);
+        
         try {
             if (!config('filament-tenancy.single_database')) {
                 $dbName = config('tenancy.database.prefix') . $record->id . config('tenancy.database.suffix');
@@ -72,7 +76,16 @@ class CreateTenant extends CreateRecord
 
             DB::connection('dynamic')->getPdo();
         } catch (\Exception $e) {
-            throw new \Exception("Failed to connect to tenant database: {$dbName}");
+            // On database connection failure, try running migrations and seeders manually
+            try {
+                \Artisan::call('tenants:migrate', ['--tenants' => $record->id]);
+                \Artisan::call('tenants:seed', ['--tenants' => $record->id]);
+                
+                // Reconnect
+                DB::connection('dynamic')->getPdo();
+            } catch (\Exception $e2) {
+                throw new \Exception("Failed to connect to tenant database: {$dbName}. Error: " . $e2->getMessage());
+            }
         }
 
         $data = [

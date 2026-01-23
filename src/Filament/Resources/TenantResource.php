@@ -5,24 +5,28 @@ namespace TomatoPHP\FilamentTenancy\Filament\Resources;
 use TomatoPHP\FilamentTenancy\Filament\Resources\TenantResource\Pages;
 use TomatoPHP\FilamentTenancy\Filament\Resources\TenantResource\RelationManagers;
 use Filament\Forms;
-use Filament\Forms\Form;
-use Filament\Forms\Get;
 use Filament\Notifications\Notification;
 use Filament\Resources\Resource;
+use Filament\Schemas\Schema;
+use Filament\Schemas\Components\Section;
 use Filament\Tables;
+use Filament\Actions\Action;
+use Filament\Actions\BulkActionGroup;
+use Filament\Actions\DeleteAction;
+use Filament\Actions\DeleteBulkAction;
+use Filament\Actions\EditAction;
 use Filament\Tables\Table;
-use Illuminate\Database\Eloquent\Builder;
-use Illuminate\Database\Eloquent\SoftDeletingScope;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Str;
 use Illuminate\Validation\Rules\Password;
 use TomatoPHP\FilamentTenancy\Models\Tenant;
 
 class TenantResource extends Resource
 {
     protected static ?string $model = Tenant::class;
-
-    protected static ?string $navigationIcon = 'heroicon-o-globe-alt';
-
+    
     public static function getNavigationGroup(): ?string
     {
         return trans('filament-tenancy::messages.group');
@@ -43,33 +47,33 @@ class TenantResource extends Resource
         return trans('filament-tenancy::messages.title');
     }
 
-    public static function form(Form $form): Form
+    public static function form(Schema $schema): Schema
     {
-        return $form
+        return $schema
             ->schema([
-                Forms\Components\Section::make([
+                Section::make([
                     Forms\Components\TextInput::make('name')
                         ->label(trans('filament-tenancy::messages.columns.name'))
                         ->required()
-                        ->unique(table:'tenants', ignoreRecord: true)->live(onBlur: true)
-                        ->afterStateUpdated(function(Forms\Set $set, $state) {
-                            $set('id', $slug = \Str::of($state)->slug('_')->toString());
-                            $set('domain', \Str::of($state)->slug()->toString());
+                        ->unique(table: 'tenants', ignoreRecord: true)
+                        ->live(onBlur: true)
+                        ->afterStateUpdated(function (Set $set, $state) {
+                            $set('id', Str::slug($state, '_'));
+                            $set('domain', Str::slug($state));
                         }),
                     Forms\Components\TextInput::make('id')
                         ->label(trans('filament-tenancy::messages.columns.unique_id'))
                         ->required()
-                        ->disabled(fn($context) => $context !=='create')
+                        ->disabled(fn ($context) => $context !== 'create')
                         ->unique(table: 'tenants', ignoreRecord: true),
                     Forms\Components\TextInput::make('domain')
                         ->columnSpanFull()
                         ->label(trans('filament-tenancy::messages.columns.domain'))
                         ->required()
-                        ->visible(fn($context) => $context ==='create')
-                        ->unique(table: 'domains',ignoreRecord: true)
-                        ->prefix(request()->getScheme()."://")
-                        ->suffix(".".request()->getHost())
-                    ,
+                        ->visible(fn ($context) => $context === 'create')
+                        ->unique(table: 'domains', ignoreRecord: true)
+                        ->prefix(request()->getScheme() . '://')
+                        ->suffix('.' . request()->getHost()),
                     Forms\Components\TextInput::make('email')
                         ->label(trans('filament-tenancy::messages.columns.email'))
                         ->required()
@@ -80,8 +84,8 @@ class TenantResource extends Resource
                     Forms\Components\TextInput::make('password')
                         ->label(trans('filament-tenancy::messages.columns.password'))
                         ->password()
-                        ->revealable(filament()->arePasswordsRevealable())
-                        ->rule(Password::default())
+                        ->revealable()
+                        ->rules([Password::default()])
                         ->autocomplete('new-password')
                         ->dehydrated(fn ($state): bool => filled($state))
                         ->dehydrateStateUsing(fn ($state): string => Hash::make($state))
@@ -90,12 +94,12 @@ class TenantResource extends Resource
                     Forms\Components\TextInput::make('passwordConfirmation')
                         ->label(trans('filament-tenancy::messages.columns.passwordConfirmation'))
                         ->password()
-                        ->revealable(filament()->arePasswordsRevealable())
+                        ->revealable()
                         ->dehydrated(false),
                     Forms\Components\Toggle::make('is_active')
                         ->label(trans('filament-tenancy::messages.columns.is_active'))
                         ->default(true),
-                ])->columns()
+                ])->columns(),
             ]);
     }
 
@@ -109,40 +113,39 @@ class TenantResource extends Resource
                     ->sortable(),
                 Tables\Columns\TextColumn::make('name')
                     ->label(trans('filament-tenancy::messages.columns.name'))
-                    ->description(function ($record){
-                        return request()->getScheme()."://".$record->domains()->first()?->domain .'.'.config('filament-tenancy.central_domain'). '/app';
+                    ->description(function ($record) {
+                        return request()->getScheme() . '://' . ($record->domains()->first()?->domain ?? '') . '.' . config('filament-tenancy.central_domain') . '/app';
                     }),
                 Tables\Columns\ToggleColumn::make('is_active')
                     ->sortable()
-                    ->label(trans('filament-tenancy::messages.columns.is_active'))
+                    ->label(trans('filament-tenancy::messages.columns.is_active')),
             ])
             ->filters([
                 Tables\Filters\TernaryFilter::make('is_active')
-                    ->label(trans('filament-tenancy::messages.columns.is_active'))
+                    ->label(trans('filament-tenancy::messages.columns.is_active')),
             ])
             ->defaultSort('created_at', 'desc')
             ->actions([
-                Tables\Actions\Action::make('view')
+                Action::make('view')
                     ->label(trans('filament-tenancy::messages.actions.view'))
                     ->tooltip(trans('filament-tenancy::messages.actions.view'))
                     ->iconButton()
                     ->icon('heroicon-s-link')
-                    ->url(fn($record) => request()->getScheme()."://".$record->domains()->first()?->domain .'.'.config('filament-tenancy.central_domain'). '/'. filament('filament-tenancy')->panel)
+                    ->url(fn ($record) => request()->getScheme() . '://' . ($record->domains()->first()?->domain ?? '') . '.' . config('filament-tenancy.central_domain') . '/' . filament()->getDefaultPanel()->getPath())
                     ->openUrlInNewTab(),
-                Tables\Actions\Action::make('login')
+                Action::make('login')
                     ->label(trans('filament-tenancy::messages.actions.login'))
                     ->tooltip(trans('filament-tenancy::messages.actions.login'))
-                    ->visible(filament('filament-tenancy')->allowImpersonate)
+                    ->visible(config('filament-tenancy.allow_impersonate', false))
                     ->requiresConfirmation()
                     ->color('warning')
                     ->iconButton()
                     ->icon('heroicon-s-arrow-left-on-rectangle')
-                    ->action(function ($record){
+                    ->action(function ($record) {
                         $token = tenancy()->impersonate($record, 1, '/app', 'web');
-
-                        return redirect()->to(request()->getScheme()."://".$record->domains[0]->domain.'.'. config('filament-tenancy.central_domain') . '/login/url?token='.$token->token .'&email='. urlencode($record->email));
+                        return redirect()->to(request()->getScheme() . '://' . $record->domains[0]->domain . '.' . config('filament-tenancy.central_domain') . '/login/url?token=' . $token->token . '&email=' . urlencode($record->email));
                     }),
-                Tables\Actions\Action::make('password')
+                Action::make('password')
                     ->label(trans('filament-tenancy::messages.actions.password'))
                     ->tooltip(trans('filament-tenancy::messages.actions.password'))
                     ->requiresConfirmation()
@@ -153,29 +156,28 @@ class TenantResource extends Resource
                         Forms\Components\TextInput::make('password')
                             ->label(trans('filament-tenancy::messages.columns.password'))
                             ->password()
-                            ->revealable(filament()->arePasswordsRevealable())
-                            ->rule(Password::default())
+                            ->revealable()
+                            ->rules([Password::default()])
                             ->autocomplete('new-password')
                             ->dehydrated(fn ($state): bool => filled($state))
                             ->live(debounce: 500)
                             ->same('passwordConfirmation'),
-                        Forms\Components\TextInput::make('password_confirmation')
+                        Forms\Components\TextInput::make('passwordConfirmation')
                             ->label(trans('filament-tenancy::messages.columns.passwordConfirmation'))
                             ->password()
-                            ->revealable(filament()->arePasswordsRevealable())
+                            ->revealable()
                             ->dehydrated(false),
                     ])
                     ->action(function (array $data, $record) {
                         $record->password = bcrypt($data['password']);
                         $record->save();
-
                         Notification::make()
                             ->title(trans('filament-tenancy::messages.actions.notificaitons.password.title'))
                             ->body(trans('filament-tenancy::messages.actions.notificaitons.password.body'))
                             ->success()
                             ->send();
                     }),
-                Tables\Actions\EditAction::make()
+                EditAction::make()
                     ->label(trans('filament-tenancy::messages.actions.edit'))
                     ->tooltip(trans('filament-tenancy::messages.actions.edit'))
                     ->iconButton(),

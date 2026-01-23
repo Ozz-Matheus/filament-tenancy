@@ -11,7 +11,10 @@ use Filament\Forms\Components\TextInput;
 use Filament\Forms\Concerns\InteractsWithForms;
 use Filament\Forms\Contracts\HasForms;
 use Filament\Forms;
-use Filament\Forms\Get;
+use Filament\Schemas\Components\Utilities\Get;
+use Filament\Schemas\Components\Utilities\Set;
+use Filament\Schemas\Components\Grid;
+use Illuminate\Support\Str;
 use Filament\Notifications\Notification;
 use Filament\Pages\Concerns\InteractsWithFormActions;
 use Illuminate\Support\Facades\Hash;
@@ -37,7 +40,7 @@ class RegisterDemo extends Component implements HasActions, HasForms
             ->modalDescription('you will start a SaaS for you with sub-domain to test our plugins')
             ->modalSubmitActionLabel('Register')
             ->form([
-                Forms\Components\Grid::make([
+                Grid::make([
                     'sm' => 1,
                     'lg' => 2
                 ])->schema([
@@ -68,9 +71,9 @@ class RegisterDemo extends Component implements HasActions, HasForms
                         ->required()
                         ->unique(table:'tenants', ignoreRecord: true)->live(onBlur: true)
                         ->columnSpanFull()
-                        ->afterStateUpdated(function(Forms\Set $set, $state) {
-                            $set('id', $slug = \Str::of($state)->slug('_')->toString());
-                            $set('domain', \Str::of($state)->slug()->toString());
+                        ->afterStateUpdated(function(Set $set, $state) {
+                            $set('id', $slug = Str::of($state)->slug('_')->toString());
+                            $set('domain', Str::of($state)->slug()->toString());
                         }),
                     Forms\Components\TextInput::make('id')
                         ->hidden(fn(Get $get) => $get('loginBy') !== 'register')
@@ -145,8 +148,8 @@ class RegisterDemo extends Component implements HasActions, HasForms
                 }
                 if($data['loginBy'] === 'register'){
                     $otp = substr(number_format(time() * rand(), 0, '', ''), 0, 6);
-                    $data['id'] = \Str::of($data['name'])->slug('_')->toString();
-                    $data['domain'] =  \Str::of($data['name'])->slug()->toString();
+                    $data['id'] = Str::of($data['name'])->slug('_')->toString();
+                    $data['domain'] =  Str::of($data['name'])->slug()->toString();
                     session()->put('demo_user', json_encode($data));
                     session()->put('demo_otp', $otp);
 
@@ -158,7 +161,7 @@ class RegisterDemo extends Component implements HasActions, HasForms
                             'USERNAME: '.$data['domain'],
                             'OTP: '.$otp,
                             'PACKAGES: '.collect($data['packages'])->implode(','),
-                            'URL: '.'https://'.\Str::of($data['name'])->slug()->toString().'.'.config('app.domain'),
+                            'URL: '.'https://'.Str::of($data['name'])->slug()->toString().'.'.config('app.domain'),
                         ])->implode("\n"))
                         ->sendToDiscord();
 
@@ -210,7 +213,7 @@ class RegisterDemo extends Component implements HasActions, HasForms
             ->modalDescription('please use username or password to login or use social login')
             ->modalSubmitActionLabel('Login')
             ->form([
-                Forms\Components\Grid::make([
+                Grid::make([
                     'sm' => 1,
                     'lg' => 2
                 ])->schema([
